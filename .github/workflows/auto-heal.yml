@@ -1,0 +1,70 @@
+name: Auto AI Heal
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Self-healing checks
+        id: checks
+        continue-on-error: true
+        run: |
+          echo "build_result=pass" >> $GITHUB_OUTPUT
+          npx next build 2>&1 | tee /tmp/build.log || echo "build_result=fail" >> $GITHUB_OUTPUT
+
+      - name: AI Debug & Fix
+        if: steps.checks.outputs.build_result == 'fail'
+        env:
+          OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ai-heal.mjs
+
+      - name: Verify fix
+        if: steps.checks.outputs.build_result == 'fail'
+        run: npx next build 2>&1 && echo "FIX_VERIFIED=true" >> $GITHUB_ENV || echo "FIX_VERIFIED=false" >> $GITHUB_ENV
+
+      - name: Commit and push fixes
+        if: steps.checks.outputs.build_result == 'fail'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "vibecoder-auto-heal"
+          git config user.email "auto-heal@vibecoder.dev"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "auto-heal: AI debugging fix [skip ci]"
+            git push
+          fi
+
+      - name: Create issue if fix failed
+        if: env.FIX_VERIFIED == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Auto-heal failed: build still broken" \
+            --body "The AI self-healing pipeline ran but could not fix the build error automatically. Check the last workflow run for details." \
+            --label "bug"
