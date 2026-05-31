@@ -23,7 +23,19 @@ function fail(msg) { console.log(` ${colors.red('✗')} ${msg}`); }
 
 function getApiKeys() {
   const envVal = process.env.OPENROUTER_API_KEYS || process.env.OPENROUTER_API_KEY || '';
-  return envVal.split(',').map((k) => k.trim()).filter(Boolean);
+  if (envVal) return envVal.split(',').map((k) => k.trim()).filter(Boolean);
+  // Fallback: read .env.local directly
+  try {
+    const envPath = resolve(root, '.env.local');
+    if (existsSync(envPath)) {
+      const content = readFileSync(envPath, 'utf-8');
+      const match = content.match(/(?:^|\n)OPENROUTER_API_KEYS\s*=\s*(.+?)(?:\n|$)/);
+      if (match) {
+        return match[1].split(',').map((k) => k.trim()).filter(Boolean);
+      }
+    }
+  } catch { /* ignore */ }
+  return [];
 }
 
 function httpsGet(url) {
