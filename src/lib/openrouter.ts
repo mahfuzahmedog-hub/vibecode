@@ -1,12 +1,17 @@
 import OpenAI from 'openai';
 import { getMcpClient } from './mcp-client';
 
-export const MODEL_PRIORITY = [
-  'qwen/qwen3-coder:free',
-  'openrouter/owl-alpha',
-  'deepseek/deepseek-chat',
-  'poolside/laguna-m1:free',
-];
+export const MODEL_PRIORITY: string[] = (() => {
+  const envModels = process.env.MODEL_PRIORITY;
+  if (envModels) return envModels.split(',').map(m => m.trim()).filter(Boolean);
+  return [
+    'qwen/qwen3-coder:free',
+    'deepseek/deepseek-chat:free',
+    'google/gemini-2.0-flash-exp:free',
+    'mistralai/mistral-small-24b-instruct-2501:free',
+    'nousresearch/deephermes-3-mistral-24b:free',
+  ];
+})();
 
 function getApiKeys(): string[] {
   const apiKeysEnv = process.env.OPENROUTER_API_KEYS;

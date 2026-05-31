@@ -280,7 +280,12 @@ export default function VibeCodingPage() {
           body: JSON.stringify({ prompt: trimmed, model: selectedModel }),
         });
 
-        if (!response.ok) throw new Error(`${mode} request failed`);
+        if (!response.ok) {
+          const errBody = await response.text();
+          let errMsg: string;
+          try { errMsg = JSON.parse(errBody).error || errBody; } catch { errMsg = errBody || `${mode} request failed`; }
+          throw new Error(errMsg);
+        }
 
         const data = await response.json();
         setCode(typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data));
@@ -292,7 +297,12 @@ export default function VibeCodingPage() {
           body: JSON.stringify({ prompt: trimmed, model: selectedModel }),
         });
 
-        if (!response.ok) throw new Error('Generation failed');
+        if (!response.ok) {
+          const errBody = await response.text();
+          let errMsg: string;
+          try { errMsg = JSON.parse(errBody).error || errBody; } catch { errMsg = errBody || 'Generation failed'; }
+          throw new Error(errMsg);
+        }
 
         const model = response.headers.get('X-Model') || 'Unknown';
         setModelUsed(model);
