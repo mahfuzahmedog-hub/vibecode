@@ -33,9 +33,9 @@ export default function VibeCodingPage() {
   const [keySaved, setKeySaved] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-50));
-  };
+  }, []);
 
   // MCP connection & workflow loading
   const loadWorkflows = useCallback(async () => {
@@ -219,14 +219,16 @@ export default function VibeCodingPage() {
     if (!iframeRef.current) return;
 
     // Inject a script to catch runtime errors and report them back to the parent
+    const origin = window.location.origin;
     const errorCatcher = `
       <script>
+        var targetOrigin = '${origin}';
         window.onerror = function(message, source, lineno, colno, error) {
-          window.parent.postMessage({ type: 'RUNTIME_ERROR', error: message + ' at line ' + lineno }, '*');
+          window.parent.postMessage({ type: 'RUNTIME_ERROR', error: message + ' at line ' + lineno }, targetOrigin);
           return true;
         };
         window.addEventListener('unhandledrejection', event => {
-          window.parent.postMessage({ type: 'RUNTIME_ERROR', error: 'Unhandled Promise: ' + event.reason }, '*');
+          window.parent.postMessage({ type: 'RUNTIME_ERROR', error: 'Unhandled Promise: ' + event.reason }, targetOrigin);
         });
       </script>
     `;
@@ -281,7 +283,9 @@ export default function VibeCodingPage() {
   }, [getHeaders, addLog]);
 
   useEffect(() => {
+    const origin = window.location.origin;
     const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== origin) return;
       if (event.data.type === 'RUNTIME_ERROR') {
         const errMsg = event.data.error;
         setError(`Runtime Error: ${errMsg}`);
@@ -291,7 +295,7 @@ export default function VibeCodingPage() {
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [code, autoFix]);
+  }, [autoFix, addLog]);
 
   const handleGenerate = async () => {
     const trimmed = prompt.trim();
