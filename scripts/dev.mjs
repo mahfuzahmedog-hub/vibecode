@@ -221,6 +221,25 @@ function freePort() {
   } catch {}
 }
 
+function discoverModels() {
+  try {
+    const result = execSync('node scripts/model-discovery.mjs --force', {
+      cwd: root,
+      timeout: 30000,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const lines = result.split('\n').filter(l => l.startsWith('  "'));
+    if (lines.length > 0) {
+      ok(`Auto-discovered ${lines.length} working model(s)`);
+    } else {
+      warn('No models discovered — will use fallback list');
+    }
+  } catch {
+    warn('Model discovery skipped (OpenRouter not reachable or no keys)');
+  }
+}
+
 function checkDiskSpace() {
   try {
     if (isWin) {
@@ -396,6 +415,7 @@ async function main() {
     step('system memory', checkMemory);
     step('disk space', checkDiskSpace);
     step(`free port ${PORT}`, freePort);
+    step('model discovery', discoverModels);
 
     saveHealth();
 

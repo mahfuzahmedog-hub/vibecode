@@ -40,6 +40,9 @@ yarn-error.log*
 response.json
 response2.json
 
+# healing cache (auto-generated at runtime)
+.heal-cache/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

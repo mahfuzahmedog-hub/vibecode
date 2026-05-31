@@ -1,58 +1,132 @@
 import OpenAI from 'openai';
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
 import { getMcpClient } from './mcp-client';
+import { FALLBACK_MODELS } from './models';
 
-export const MODEL_PRIORITY: string[] = (() => {
-  const envModels = process.env.MODEL_PRIORITY;
-  if (envModels) return envModels.split(',').map(m => m.trim()).filter(Boolean);
-  return [
-    'qwen/qwen3-coder:free',
-    'deepseek/deepseek-chat:free',
-    'google/gemini-2.0-flash-exp:free',
-    'mistralai/mistral-small-24b-instruct-2501:free',
-    'nousresearch/deephermes-3-mistral-24b:free',
-  ];
-})();
+export { FALLBACK_MODELS, MODEL_PRIORITY } from './models';
 
-function getApiKeys(): string[] {
-  const apiKeysEnv = process.env.OPENROUTER_API_KEYS;
-  if (apiKeysEnv) {
-    return apiKeysEnv
-      .split(',')
-      .map((key) => key.trim())
-      .filter((key): key is string => key.length > 0);
-  }
-
-  const singleKey = process.env.OPENROUTER_API_KEY;
-  if (singleKey && singleKey !== 'your_key_here') {
-    return [singleKey];
-  }
-
+function getCachedModels(): string[] {
+  try {
+    const cachePath = resolve(process.cwd(), '.heal-cache', 'working-models.json');
+    if (existsSync(cachePath)) {
+      const data = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      if (Array.isArray(data.models) && data.models.length > 0) return data.models;
+    }
+  } catch { /* ignore — fallback used instead */ }
   return [];
 }
 
+export function buildModelList(preferredModel: string | null): string[] {
+  const models: string[] = [];
+  if (preferredModel) models.push(preferredModel);
+  // Try auto-discovered cache first, then env config, then fallback
+  const cached = getCachedModels();
+  const priority = cached.length > 0 ? cached : (process.env.MODEL_PRIORITY?.split(',').map(m => m.trim()).filter(Boolean) || FALLBACK_MODELS);
+  for (const m of priority) {
+    if (!models.includes(m)) models.push(m);
+  }
+  for (const m of FALLBACK_MODELS) {
+    if (!models.includes(m)) models.push(m);
+  }
+  return models;
+}
+
+function getApiKeys(clientApiKey?: string): string[] {
+  const keys: string[] = [];
+  // Client-supplied key (from in-app settings) tried first
+  if (clientApiKey && clientApiKey.trim()) {
+    keys.push(clientApiKey.trim());
+  }
+  // Then env var keys
+  const apiKeysEnv = process.env.OPENROUTER_API_KEYS;
+  if (apiKeysEnv) {
+    for (const key of apiKeysEnv.split(',').map(k => k.trim()).filter(Boolean)) {
+      if (!keys.includes(key)) keys.push(key);
+    }
+  }
+  const singleKey = process.env.OPENROUTER_API_KEY;
+  if (singleKey && singleKey !== 'your_key_here') {
+    if (!keys.includes(singleKey)) keys.push(singleKey);
+  }
+  return keys;
+}
+
+function buildSystemPromptSync(): string {
+  return `You are an expert software engineer.
+Generate production-ready code.
+STRICT RULES:
+- Return ONLY source code.
+- No markdown, no code fences, no explanations.
+- Ensure it is complete and executable.`;
+}
+
+function buildStepSystemPrompt(role: string): string {
+  if (role === 'CEO') {
+    return `You are a CEO providing strategic business guidance.
+Provide clear, actionable business advice.
+STRICT RULES:
+- Return ONLY plain text advice.
+- No markdown, no code fences, no explanations.
+- Ensure it is complete and actionable.`;
+  }
+  if (role === 'DESIGNER') {
+    return `You are a senior designer providing design guidance.
+Provide clear, actionable design advice.
+STRICT RULES:
+- Return ONLY plain text advice.
+- No markdown, no code fences, no explanations.
+- Ensure it is complete and actionable.`;
+  }
+  return `You are a helpful assistant.
+Provide clear, helpful responses.
+STRICT RULES:
+- Return ONLY plain text.
+- No markdown, no code fences, no explanations.
+- Ensure it is complete and helpful.`;
+}
+
+// ---------------------------------------------------------------------------
+// Streaming generation (for Code mode)
+// ---------------------------------------------------------------------------
 export async function generateVibeCodeStream(
   prompt: string,
   errorContext: string | null = null,
-  preferredModel: string | null = null
+  preferredModel: string | null = null,
+  clientApiKey?: string,
 ): Promise<{ stream: ReadableStream; model: string }> {
-  const apiKeys = getApiKeys();
+  const apiKeys = getApiKeys(clientApiKey);
   if (apiKeys.length === 0) {
     throw new Error('No OpenRouter API Keys are configured.');
   }
 
-  // Determine model order: preferred model first, then fallback to priority list
-  const modelsToTry: string[] = [];
-  if (preferredModel && MODEL_PRIORITY.includes(preferredModel)) {
-    modelsToTry.push(preferredModel);
-  }
-  // Add all models from priority list, avoiding duplicates
-  for (const model of MODEL_PRIORITY) {
-    if (!modelsToTry.includes(model)) {
-      modelsToTry.push(model);
-    }
-  }
+  const modelsToTry = buildModelList(preferredModel);
 
-  // Try each API key in order
+  // Enhanced system prompt with MCP tools
+  let systemPrompt = buildSystemPromptSync();
+  try {
+    const mcpUrl = process.env.N8N_MCP_SERVER_URL || '';
+    if (mcpUrl && mcpUrl !== 'your_n8n_mcp_server_url_here') {
+      const mcpClient = getMcpClient(mcpUrl);
+      await mcpClient.connect();
+      const tools = await mcpClient.listTools();
+      systemPrompt += `\n\nYou have access to n8n workflow automation via MCP (Model Context Protocol).
+Available MCP tools:
+${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
+
+When the user asks to create a workflow, generate the n8n workflow JSON definition.
+To execute a tool, output a JSON block like: {"_type":"mcp_call","tool":"TOOL_NAME","args":{...}}`;
+    }
+  } catch { /* No MCP — continue without */ }
+
+  const fixPrompt = `The previous code generation resulted in the following error:
+${errorContext}
+
+Please provide the corrected version of the full code.
+STRICT RULES: Return ONLY the corrected source code. No markdown, no code fences, no explanations.`;
+
+  const finalPrompt = errorContext ? fixPrompt : prompt;
+
   let lastError: Error | null = null;
   for (const apiKey of apiKeys) {
     const client = new OpenAI({
@@ -64,45 +138,6 @@ export async function generateVibeCodeStream(
       },
     });
 
-    // Build enhanced system prompt with MCP tool awareness
-    let systemPrompt = `You are an expert software engineer.
-Generate production-ready code.
-STRICT RULES:
-- Return ONLY source code.
-- No markdown, no code fences, no explanations.
-- Ensure it is complete and executable.`;
-
-    // Add MCP tool information if available
-    try {
-      const mcpUrl = process.env.N8N_MCP_SERVER_URL || '';
-      if (mcpUrl && mcpUrl !== 'your_n8n_mcp_server_url_here') {
-        const mcpClient = getMcpClient(mcpUrl);
-        await mcpClient.connect();
-        const tools = await mcpClient.listTools();
-        systemPrompt += `
-
-You have access to n8n workflow automation via MCP (Model Context Protocol).
-Available MCP tools:
-${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
-
-When the user asks to create a workflow, generate the n8n workflow JSON definition.
-To execute a tool, output a JSON block like: {"_type":"mcp_call","tool":"TOOL_NAME","args":{...}}`;
-      }
-    } catch (mcpError) {
-      // Silently continue if MCP is not available
-      const errorMessage = mcpError instanceof Error ? mcpError.message : 'Unknown error';
-      console.debug('MCP not available for enhanced system prompt:', errorMessage);
-    }
-
-    const fixPrompt = `The previous code generation resulted in the following error:
-${errorContext}
-
-Please provide the corrected version of the full code.
-STRICT RULES: Return ONLY the corrected source code. No markdown, no code fences, no explanations.`;
-
-    const finalPrompt = errorContext ? fixPrompt : prompt;
-
-    // Try each model in order with this API key
     for (const model of modelsToTry) {
       try {
         const stream = await client.chat.completions.create({
@@ -114,11 +149,9 @@ STRICT RULES: Return ONLY the corrected source code. No markdown, no code fences
           ],
         });
 
-        // Convert the OpenAI stream (async iterable) to a ReadableStream
         const readableStream = new ReadableStream({
           async start(controller) {
             try {
-              // The stream is an async iterable of ChatCompletionChunk
               for await (const part of stream) {
                 const content = part.choices[0]?.delta?.content || '';
                 if (content) {
@@ -129,60 +162,56 @@ STRICT RULES: Return ONLY the corrected source code. No markdown, no code fences
             } catch (error) {
               controller.error(error);
             }
-          }
+          },
         });
 
         return { stream: readableStream, model };
       } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        // Check if it's a rate limit error (429) to possibly try the next key sooner
         const err = error as { status?: number; message?: string };
-        const isRateLimit = err.status === 429 ||
-                      (err.message && err.message.includes('429')) ||
-                      (err.message && err.message.includes('rate limit'));
-        if (isRateLimit) {
-          console.warn(`API key ending in ${apiKey.slice(-4)} hit rate limit, trying next key`);
-          // Break out of the model loop to try the next API key
+        if (err.status === 429 || (err.message && (err.message.includes('429') || err.message.includes('rate limit')))) {
+          console.warn(`Key ending in ${apiKey.slice(-4)} rate limited on ${model}, next key`);
           break;
-        } else {
-          console.warn(`Model ${model} failed with API key ending in ${apiKey.slice(-4)}:`, err.message);
-          // Continue to try the next model with the same API key
-          continue;
         }
+        console.warn(`Model ${model} failed (key ...${apiKey.slice(-4)}): ${err.message}`);
       }
     }
-    // If we tried all models with this API key and none worked, we continue to the next API key
-    // (unless we broke due to rate limit, in which case we already moved to the next key)
   }
 
-  // If all API keys and models failed, throw the last error
   throw new Error(`All API keys and models failed. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
+// ---------------------------------------------------------------------------
+// Non-streaming generation (for Plan/Design modes)
+// ---------------------------------------------------------------------------
 export async function generateVibeStep(
   role: string,
   prompt: string,
   context: string | null = null,
-  preferredModel: string | null = null
+  preferredModel: string | null = null,
+  clientApiKey?: string,
 ): Promise<string> {
-  const apiKeys = getApiKeys();
+  const apiKeys = getApiKeys(clientApiKey);
   if (apiKeys.length === 0) {
     throw new Error('No OpenRouter API Keys are configured.');
   }
 
-  // Determine model order: preferred model first, then fallback to priority list
-  const modelsToTry: string[] = [];
-  if (preferredModel && MODEL_PRIORITY.includes(preferredModel)) {
-    modelsToTry.push(preferredModel);
-  }
-  // Add all models from priority list, avoiding duplicates
-  for (const model of MODEL_PRIORITY) {
-    if (!modelsToTry.includes(model)) {
-      modelsToTry.push(model);
-    }
-  }
+  const modelsToTry = buildModelList(preferredModel);
+  let systemPrompt = buildStepSystemPrompt(role);
 
-  // Try each API key in order
+  // Add MCP awareness
+  try {
+    const mcpUrl = process.env.N8N_MCP_SERVER_URL || '';
+    if (mcpUrl && mcpUrl !== 'your_n8n_mcp_server_url_here') {
+      const mcpClient = getMcpClient(mcpUrl);
+      await mcpClient.connect();
+      const tools = await mcpClient.listTools();
+      systemPrompt += `\n\nAvailable n8n workflow automation tools via MCP:\n${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}\n\nIf the user asks for workflow creation, you can describe the n8n workflow definition.`;
+    }
+  } catch { /* no MCP */ }
+
+  const finalPrompt = context ? `Context: ${context}\n\nRequest: ${prompt}` : prompt;
+
   let lastError: Error | null = null;
   for (const apiKey of apiKeys) {
     const client = new OpenAI({
@@ -194,48 +223,6 @@ export async function generateVibeStep(
       },
     });
 
-    let systemPrompt = '';
-    if (role === 'CEO') {
-      systemPrompt = `You are a CEO providing strategic business guidance.
-Provide clear, actionable business advice.
-STRICT RULES:
-- Return ONLY plain text advice.
-- No markdown, no code fences, no explanations.
-- Ensure it is complete and actionable.`;
-    } else if (role === 'DESIGNER') {
-      systemPrompt = `You are a senior designer providing design guidance.
-Provide clear, actionable design advice.
-STRICT RULES:
-- Return ONLY plain text advice.
-- No markdown, no code fences, no explanations.
-- Ensure it is complete and actionable.`;
-    } else {
-      systemPrompt = `You are a helpful assistant.
-Provide clear, helpful responses.
-STRICT RULES:
-- Return ONLY plain text.
-- No markdown, no code fences, no explanations.
-- Ensure it is complete and helpful.`;
-    }
-
-    // Add MCP tool awareness to step generation
-    try {
-      const mcpUrl = process.env.N8N_MCP_SERVER_URL || '';
-      if (mcpUrl && mcpUrl !== 'your_n8n_mcp_server_url_here') {
-        const mcpClient = getMcpClient(mcpUrl);
-        await mcpClient.connect();
-        const tools = await mcpClient.listTools();
-        systemPrompt += `\n\nAvailable n8n workflow automation tools via MCP:\n${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}\n\nIf the user asks for workflow creation, you can describe the n8n workflow definition.`;
-      }
-    } catch {
-      // Silently continue
-    }
-
-    const finalPrompt = context
-      ? `Context: ${context}\n\nRequest: ${prompt}`
-      : prompt;
-
-    // Try each model in order with this API key
     for (const model of modelsToTry) {
       try {
         const completion = await client.chat.completions.create({
@@ -246,39 +233,24 @@ STRICT RULES:
           ],
           stream: false,
         });
-
         return completion.choices[0]?.message?.content || '';
       } catch (error: unknown) {
         lastError = error instanceof Error ? error : new Error(String(error));
         const err = error as { status?: number; message?: string };
-        const isRateLimit = err.status === 429 ||
-                          (err.message && err.message.includes('429')) ||
-                          (err.message && err.message.includes('rate limit'));
-        if (isRateLimit) {
-          console.warn(`API key ending in ${apiKey.slice(-4)} hit rate limit for generateVibeStep, trying next key`);
+        if (err.status === 429 || (err.message && (err.message.includes('429') || err.message.includes('rate limit')))) {
+          console.warn(`Key ending in ${apiKey.slice(-4)} rate limited on ${model}, next key`);
           break;
-        } else {
-          console.warn(`Model ${model} failed for generateVibeStep with API key ending in ${apiKey.slice(-4)}:`, err.message);
-          continue;
         }
+        console.warn(`Model ${model} failed (key ...${apiKey.slice(-4)}): ${err.message}`);
       }
     }
-    // If we tried all models with this API key and none worked, we continue to the next API key
   }
 
-  // If all API keys and models failed, throw the last error
-  throw new Error(`All API keys and models failed for generateVibeStep. Last error: ${lastError?.message || 'Unknown error'}`);
+  throw new Error(`All API keys and models failed. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
-// Placeholder for cache functions (to be implemented later)
-export function clearResponseCache() {
-  // TODO: Implement cache clearing
-}
+export function clearResponseCache() { /* no-op */ }
 
 export function getCacheStats() {
-  // TODO: Implement cache stats
-  return {
-    size: 0,
-    keys: []
-  };
+  return { size: 0, keys: [] };
 }

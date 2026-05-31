@@ -1,0 +1,42 @@
+name: Weekly Model Discovery
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --ignore-scripts
+
+      - name: Discover working models
+        id: discover
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
+        run: node scripts/model-discovery.mjs --force
+
+      - name: Create issue if discovery failed
+        if: steps.discover.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Model discovery failed: no working models found" \
+            --body "The weekly model discovery could not find any working free models on OpenRouter.
+            Check that:
+            1. OPENROUTER_API_KEYS secret is set in repo Settings → Secrets and variables → Actions
+            2. The API keys are still valid at https://openrouter.ai/keys
+            3. Free model availability on OpenRouter
+            Run \`npm run discover-models\` locally to debug." \
+            --label "bug"

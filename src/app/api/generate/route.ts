@@ -8,7 +8,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prompt or error is required' }, { status: 400 });
     }
 
-    const { stream, model: usedModel } = await generateVibeCodeStream(prompt || '', error || null, model ?? null);
+    const clientApiKey = request.headers.get('x-api-key') || undefined;
+    const { stream, model: usedModel } = await generateVibeCodeStream(prompt || '', error || null, model ?? null, clientApiKey);
 
     // Return the stream directly with appropriate headers
     return new Response(stream, {

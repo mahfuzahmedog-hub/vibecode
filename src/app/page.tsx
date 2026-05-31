@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, Send, Rocket, Loader2, AlertCircle, Terminal, Play, RefreshCcw, Workflow, Plus, Settings2 } from 'lucide-react';
+import { Sparkles, Send, Rocket, Loader2, AlertCircle, Terminal, Play, RefreshCcw, Workflow, Plus, Settings2, Key, Eye, EyeOff, Check } from 'lucide-react';
 import Editor from '@monaco-editor/react';
-import { MODEL_PRIORITY } from '@/lib/openrouter';
+import { MODEL_PRIORITY } from '@/lib/models';
 
 interface WorkflowSummary {
   id: string;
@@ -27,6 +27,10 @@ export default function VibeCodingPage() {
   const [deployingToN8n, setDeployingToN8n] = useState(false);
   const [toolConfig, setToolConfig] = useState<{ open: boolean; toolName: string; args: Record<string, string>; result: unknown }>({ open: false, toolName: '', args: {}, result: null });
   const [mode, setMode] = useState<'code' | 'plan' | 'design'>('code');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const addLog = (msg: string) => {
@@ -82,6 +86,35 @@ export default function VibeCodingPage() {
   useEffect(() => {
     connectMcp();
   }, [connectMcp]);
+
+  // Load API key from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('vibecoder_api_key');
+    if (saved) {
+      setApiKey(saved);
+      setKeySaved(true);
+    }
+  }, []);
+
+  const saveApiKey = useCallback((key: string) => {
+    const trimmed = key.trim();
+    if (trimmed) {
+      localStorage.setItem('vibecoder_api_key', trimmed);
+      setApiKey(trimmed);
+      setKeySaved(true);
+    } else {
+      localStorage.removeItem('vibecoder_api_key');
+      setApiKey('');
+      setKeySaved(false);
+    }
+  }, []);
+
+  const getHeaders = useCallback((extra: Record<string, string> = {}): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
+    const saved = apiKey || localStorage.getItem('vibecoder_api_key') || '';
+    if (saved) headers['x-api-key'] = saved;
+    return headers;
+  }, [apiKey]);
 
   // Reveal workflow panel
   const toggleWorkflows = useCallback(async () => {
@@ -220,7 +253,7 @@ export default function VibeCodingPage() {
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({ error: runtimeError }),
       });
 
@@ -245,7 +278,7 @@ export default function VibeCodingPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [getHeaders, addLog]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -276,7 +309,7 @@ export default function VibeCodingPage() {
       if (mode === 'plan' || mode === 'design') {
         const response = await fetch(`/api/${mode}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getHeaders(),
           body: JSON.stringify({ prompt: trimmed, model: selectedModel }),
         });
 
@@ -293,7 +326,7 @@ export default function VibeCodingPage() {
       } else {
         const response = await fetch('/api/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getHeaders(),
           body: JSON.stringify({ prompt: trimmed, model: selectedModel }),
         });
 
@@ -342,21 +375,30 @@ export default function VibeCodingPage() {
           <h1 className="text-xl font-bold tracking-tight">VibeCoder <span className="text-indigo-400 font-medium text-sm">Live</span></h1>
         </div>
          <div className="flex items-center gap-4">
-           <div className="relative">
-             <label className="text-xs text-slate-400">Model:</label>
-             <select
-               value={selectedModel || 'auto'}
-               onChange={(e) => setSelectedModel(e.target.value === 'auto' ? null : e.target.value)}
-               className="ml-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-             >
-               <option value="auto">Auto (Fallback)</option>
-               {MODEL_PRIORITY.map((model) => (
-                 <option key={model} value={model}>
-                   {model.split('/')[1].split(':')[0]} {/* Display friendly name */}
-                 </option>
-               ))}
-             </select>
-           </div>
+            {/* API Key Status + Settings */}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95 ${keySaved ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-700/50' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'}`}
+              title={keySaved ? 'API Key configured — click to change' : 'No API Key — click to add'}
+            >
+              <Key className="w-3.5 h-3.5" />
+              {keySaved ? 'Key Set' : 'Add Key'}
+            </button>
+            <div className="relative">
+              <label className="text-xs text-slate-400">Model:</label>
+              <select
+                value={selectedModel || 'auto'}
+                onChange={(e) => setSelectedModel(e.target.value === 'auto' ? null : e.target.value)}
+                className="ml-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="auto">Auto (Fallback)</option>
+                {MODEL_PRIORITY.map((model) => (
+                  <option key={model} value={model}>
+                    {model.split('/')[1].split(':')[0]} {/* Display friendly name */}
+                  </option>
+                ))}
+              </select>
+            </div>
            {modelUsed && (
              <div className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded-full border border-slate-700 ml-3">
                Used: <span className="text-indigo-300 font-mono">{modelUsed}</span>
@@ -528,6 +570,70 @@ export default function VibeCodingPage() {
                 Execute
               </button>
               <button onClick={() => setToolConfig({ open: false, toolName: '', args: {}, result: null })} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2"><Key className="w-4 h-4 text-indigo-400" /> API Key</h3>
+              <button onClick={() => setSettingsOpen(false)} className="text-slate-500 hover:text-slate-300 text-lg">&times;</button>
+            </div>
+
+            <p className="text-xs text-slate-400 mb-4">
+              Enter your OpenRouter API key. It will be stored in your browser (localStorage) and
+              sent with every request. Never commit keys to git.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              <label className="text-xs text-slate-400">OpenRouter API Key</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+                    placeholder="sk-or-v1-..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                  <button
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">Get a key</a>
+                <span className="text-slate-600">|</span>
+                <span>No key = uses server-side env vars</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { saveApiKey(apiKey); setSettingsOpen(false); }}
+                disabled={!apiKey.trim()}
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {keySaved && apiKey.trim() ? <><Check className="w-4 h-4" /> Saved</> : 'Save Key'}
+              </button>
+              {keySaved && (
+                <button
+                  onClick={() => { saveApiKey(''); setApiKey(''); }}
+                  className="px-4 py-2 bg-red-900/30 hover:bg-red-800/50 text-red-400 rounded-lg text-sm transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+              <button onClick={() => setSettingsOpen(false)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">
                 Cancel
               </button>
             </div>

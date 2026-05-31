@@ -7,7 +7,9 @@
     "build": "node scripts/build.mjs",
     "start": "next start",
     "lint": "eslint",
-    "heal": "node scripts/dev.mjs"
+    "heal": "node scripts/dev.mjs",
+    "discover-models": "node scripts/model-discovery.mjs",
+    "health": "node scripts/model-discovery.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

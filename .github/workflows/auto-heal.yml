@@ -26,6 +26,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Discover working models
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
+        run: node scripts/model-discovery.mjs --force || echo "Model discovery skipped (no keys or API unreachable)"
+
       - name: Self-healing checks
         id: checks
         continue-on-error: true
