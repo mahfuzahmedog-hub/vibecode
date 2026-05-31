@@ -21,7 +21,7 @@ export default function VibeCodingPage() {
   const { iframeRef, executeCode } = useAutoFix();
   const {
     prompt, setPrompt, code, setCode, isLoading, setIsLoading,
-    modelUsed, setModelUsed, selectedModel, setSelectedModel,
+    modelUsed, selectedModel, setSelectedModel,
     error, setError, mode, setMode, handleGenerate,
   } = useCodeGeneration({ getHeaders, addLog, executeCode });
   const {
@@ -66,9 +66,8 @@ export default function VibeCodingPage() {
   }, [getHeaders, addLog, setCode, setIsLoading, setError]);
 
   const autoFixRef = React.useRef(autoFix);
-  autoFixRef.current = autoFix;
+  useEffect(() => { autoFixRef.current = autoFix; }, [autoFix]);
 
-  // Listen for runtime errors from iframe
   useEffect(() => {
     const origin = window.location.origin;
     const handleMessage = (event: MessageEvent) => {
@@ -157,6 +156,7 @@ export default function VibeCodingPage() {
       />
 
       <SettingsModal
+        key={String(settingsOpen)}
         open={settingsOpen}
         apiKey={apiKey}
         provider={provider}

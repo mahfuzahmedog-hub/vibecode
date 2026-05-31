@@ -1,5 +1,5 @@
 'use client';
-import { useImperativeHandle, forwardRef, useCallback } from 'react';
+import { forwardRef } from 'react';
 import { Play, RefreshCcw } from 'lucide-react';
 
 interface PreviewPanelProps {

@@ -29,7 +29,7 @@ function getCachedModels(): string[] {
   return [];
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const keys = getApiKeys();
   const cached = getCachedModels();
 

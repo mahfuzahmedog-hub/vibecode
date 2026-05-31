@@ -2,25 +2,6 @@ import OpenAI from 'openai';
 
 export type AIProvider = 'openrouter' | 'openai' | 'anthropic' | 'google';
 
-function streamToReadable(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): ReadableStream {
-  return new ReadableStream({
-    async start(controller) {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          controller.enqueue(value);
-        }
-        controller.close();
-      } catch (e) {
-        controller.error(e);
-      }
-    },
-  });
-}
-
 function buildSystemPrompt(role?: string): string {
   if (role === 'CEO') {
     return `You are a CEO providing strategic business guidance. Provide clear, actionable business advice. Return ONLY plain text. No markdown, no code fences, no explanations.`;

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getMcpClient } from '@/lib/mcp-client';
 import { deploySchema } from '@/lib/validation';
 
-const DEPLOY_WORKFLOW_ID = process.env.N8N_DEPLOY_WORKFLOW_ID || 'vibe_deploy';
+const deployWorkflowId = process.env.N8N_DEPLOY_WORKFLOW_ID || 'vibe_deploy';
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       await client.connect();
 
       const result = await client.executeTool('n8n_workflow_execute', {
-        workflowId: 'vibe_deploy',
+        workflowId: deployWorkflowId,
         data: { code, model, timestamp: new Date().toISOString() },
       });
 

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Key, Eye, EyeOff, Check } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { AIProvider } from '@/lib/types';
@@ -35,9 +35,6 @@ export function SettingsModal({
   const [localKey, setLocalKey] = useState(apiKey);
   const [localProvider, setLocalProvider] = useState(provider);
   const trapRef = useFocusTrap(open);
-
-  useEffect(() => { setLocalKey(apiKey); }, [apiKey]);
-  useEffect(() => { setLocalProvider(provider); }, [provider]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
