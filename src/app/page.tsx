@@ -326,7 +326,7 @@ export default function VibeCodingPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+      <header className="border-b border-slate-800 glass px-6 py-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-lg"><Sparkles className="w-5 h-5 text-white" /></div>
           <h1 className="text-xl font-bold tracking-tight">VibeCoder <span className="text-indigo-400 font-medium text-sm">Live</span></h1>
@@ -470,7 +470,7 @@ export default function VibeCodingPage() {
         <div className="flex-1 flex flex-col bg-[#1e1e1e] border-r border-slate-800">
           <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span className="w-3 h-3 rounded-full bg-red-500"></span><span className="w-3 h-3 rounded-full bg-yellow-500"></span><span className="w-3 h-3 rounded-full bg-green-500"></span>
+              <span className="code-dot bg-red-500"></span><span className="code-dot bg-yellow-500"></span><span className="code-dot bg-green-500"></span>
               <span className="ml-2">vibe-output.code</span>
             </div>
           </div>
