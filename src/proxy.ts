@@ -10,7 +10,7 @@ function getClientIp(request: NextRequest): string {
     || '127.0.0.1';
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
