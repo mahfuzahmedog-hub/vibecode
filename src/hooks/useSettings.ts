@@ -1,54 +1,73 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import type { AIProvider } from '@/lib/types';
 
-const STORAGE_KEY = 'vibecoder_api_key';
+const KEY_STORAGE = 'vibecoder_api_key';
+const PROVIDER_STORAGE = 'vibecoder_provider';
+
+function readStorage(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function readProvider(): AIProvider {
+  const saved = readStorage(PROVIDER_STORAGE);
+  if (saved === 'openai' || saved === 'anthropic' || saved === 'google' || saved === 'openrouter') return saved;
+  return 'openrouter';
+}
 
 export function useSettings() {
-  const [apiKey, setApiKey] = useState('');
-  const [keySaved, setKeySaved] = useState(false);
+  const [apiKey, setApiKeyState] = useState(() => readStorage(KEY_STORAGE) || '');
+  const [provider, setProviderState] = useState<AIProvider>(readProvider);
+  const [keySaved, setKeySaved] = useState(() => !!readStorage(KEY_STORAGE));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setApiKey(saved);
-      setKeySaved(true);
-    }
+  const setApiKey = useCallback((key: string) => {
+    setApiKeyState(key);
   }, []);
 
   const saveApiKey = useCallback((key: string) => {
-    const trimmed = key.trim();
-    if (trimmed) {
-      localStorage.setItem(STORAGE_KEY, trimmed);
-      setApiKey(trimmed);
+    if (key.trim()) {
+      try { localStorage.setItem(KEY_STORAGE, key.trim()); } catch { /* localStorage unavailable */ }
       setKeySaved(true);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-      setApiKey('');
-      setKeySaved(false);
+      setApiKeyState(key.trim());
     }
   }, []);
 
-  const getHeaders = useCallback((extra: Record<string, string> = {}): Record<string, string> => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
-    const saved = apiKey || localStorage.getItem(STORAGE_KEY) || '';
-    if (saved) headers['x-api-key'] = saved;
-    return headers;
-  }, [apiKey]);
-
   const clearApiKey = useCallback(() => {
-    saveApiKey('');
-  }, [saveApiKey]);
+    try {
+      localStorage.removeItem(KEY_STORAGE);
+      localStorage.removeItem(PROVIDER_STORAGE);
+    } catch { /* localStorage unavailable */ }
+    setKeySaved(false);
+    setApiKeyState('');
+    setProviderState('openrouter');
+  }, []);
+
+  const setProvider = useCallback((p: AIProvider) => {
+    try { localStorage.setItem(PROVIDER_STORAGE, p); } catch { /* localStorage unavailable */ }
+    setProviderState(p);
+  }, []);
+
+  const getHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    try {
+      const storedKey = localStorage.getItem(KEY_STORAGE);
+      if (storedKey) {
+        headers['x-api-key'] = storedKey;
+        headers['x-api-provider'] = localStorage.getItem(PROVIDER_STORAGE) || 'openrouter';
+      }
+    } catch { /* localStorage unavailable */ }
+    return headers;
+  }, []);
 
   return {
-    apiKey,
-    setApiKey,
-    keySaved,
-    settingsOpen,
-    setSettingsOpen,
-    showKey,
-    setShowKey,
+    apiKey, setApiKey,
+    provider, setProvider,
+    keySaved, setKeySaved,
+    settingsOpen, setSettingsOpen,
+    showKey, setShowKey,
     saveApiKey,
     clearApiKey,
     getHeaders,

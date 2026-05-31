@@ -1,3 +1,5 @@
+export type AIProvider = 'openrouter' | 'openai' | 'anthropic' | 'google';
+
 export interface WorkflowSummary {
   id: string;
   name: string;

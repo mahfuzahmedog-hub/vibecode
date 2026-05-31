@@ -16,7 +16,7 @@ import { ErrorToast } from '@/components/ErrorToast';
 
 export default function VibeCodingPage() {
   const { logs, addLog } = useLogs();
-  const { apiKey, keySaved, settingsOpen, showKey, setSettingsOpen, setShowKey, setApiKey, saveApiKey, clearApiKey, getHeaders } = useSettings();
+  const { apiKey, provider, keySaved, settingsOpen, showKey, setSettingsOpen, setShowKey, setApiKey, setProvider, saveApiKey, clearApiKey, getHeaders } = useSettings();
   const { iframeRef, executeCode } = useAutoFix();
   const {
     prompt, setPrompt, code, setCode, isLoading, setIsLoading,
@@ -155,10 +155,12 @@ export default function VibeCodingPage() {
       <SettingsModal
         open={settingsOpen}
         apiKey={apiKey}
+        provider={provider}
         keySaved={keySaved}
         showKey={showKey}
         onClose={() => setSettingsOpen(false)}
         onApiKeyChange={setApiKey}
+        onProviderChange={setProvider}
         onSaveKey={saveApiKey}
         onClearKey={clearApiKey}
         onToggleShowKey={() => setShowKey(!showKey)}
