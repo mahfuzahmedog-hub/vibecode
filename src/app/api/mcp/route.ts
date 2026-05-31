@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getMcpClient, McpError } from '@/lib/mcp-client';
+import { mcpSchema } from '@/lib/validation';
 
 export async function POST(request: Request) {
   try {
-    const { action, tool, args, uri } = await request.json();
-
-    if (!action) {
-      return NextResponse.json({ error: 'action is required' }, { status: 400 });
+    const body = await request.json();
+    const parsed = mcpSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid request' }, { status: 400 });
     }
+
+    const { action, tool, args, uri } = parsed.data;
 
     const serverUrl = process.env.N8N_MCP_SERVER_URL || 'http://localhost:8080';
     const client = getMcpClient(serverUrl);

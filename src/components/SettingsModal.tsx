@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { Key, Eye, EyeOff, Check } from 'lucide-react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface SettingsModalProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function SettingsModal({
   onToggleShowKey,
 }: SettingsModalProps) {
   const [localKey, setLocalKey] = useState(apiKey);
+  const trapRef = useFocusTrap(open);
 
   useEffect(() => { setLocalKey(apiKey); }, [apiKey]);
 
@@ -42,6 +44,7 @@ export function SettingsModal({
 
   return (
     <div
+      ref={trapRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
       onKeyDown={handleKeyDown}

@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import { getMcpClient } from '@/lib/mcp-client';
+import { deploySchema } from '@/lib/validation';
+
+const DEPLOY_WORKFLOW_ID = process.env.N8N_DEPLOY_WORKFLOW_ID || 'vibe_deploy';
 
 export async function POST(request: Request) {
   try {
-    const { code, model, useMcp } = await request.json();
+    const body = await request.json();
+    const parsed = deploySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid request' }, { status: 400 });
+    }
+
+    const { code, model, useMcp } = parsed.data;
 
     // Option A: Deploy via MCP tool execution
     if (useMcp) {

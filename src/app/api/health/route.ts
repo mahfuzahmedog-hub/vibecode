@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { healthPostSchema } from '@/lib/validation';
 
 const CACHE_FILE = resolve(process.cwd(), '.heal-cache', 'working-models.json');
 
@@ -22,7 +23,9 @@ function getCachedModels(): string[] {
       const data = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
       if (Array.isArray(data.models) && data.models.length > 0) return data.models;
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('Failed to read cached models:', e);
+  }
   return [];
 }
 
@@ -50,11 +53,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const testKey = body.apiKey?.trim();
-
-    if (!testKey) {
-      return NextResponse.json({ error: 'apiKey is required' }, { status: 400 });
+    const parsed = healthPostSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid request' }, { status: 400 });
     }
+
+    const testKey = parsed.data.apiKey.trim();
 
     // Validate the key by making a lightweight API call
     const response = await fetch('https://openrouter.ai/api/v1/auth/key', {

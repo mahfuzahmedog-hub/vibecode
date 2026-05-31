@@ -2,6 +2,7 @@
 import { useCallback } from 'react';
 import { Settings2 } from 'lucide-react';
 import type { ToolConfig } from '@/lib/types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface ToolConfigModalProps {
   config: ToolConfig;
@@ -11,6 +12,7 @@ interface ToolConfigModalProps {
 }
 
 export function ToolConfigModal({ config, onClose, onUpdateArgs, onExecute }: ToolConfigModalProps) {
+  const trapRef = useFocusTrap(config.open);
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
@@ -19,6 +21,7 @@ export function ToolConfigModal({ config, onClose, onUpdateArgs, onExecute }: To
 
   return (
     <div
+      ref={trapRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
       onKeyDown={handleKeyDown}

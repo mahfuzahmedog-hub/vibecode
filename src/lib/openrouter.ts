@@ -13,7 +13,9 @@ function getCachedModels(): string[] {
       const data = JSON.parse(readFileSync(cachePath, 'utf-8'));
       if (Array.isArray(data.models) && data.models.length > 0) return data.models;
     }
-  } catch { /* ignore — fallback used instead */ }
+  } catch (e) {
+    console.error('Failed to read cached models:', e);
+  }
   return [];
 }
 
@@ -117,7 +119,9 @@ ${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
 When the user asks to create a workflow, generate the n8n workflow JSON definition.
 To execute a tool, output a JSON block like: {"_type":"mcp_call","tool":"TOOL_NAME","args":{...}}`;
     }
-  } catch { /* No MCP — continue without */ }
+    } catch (e) {
+      console.warn('MCP not available, continuing without:', e instanceof Error ? e.message : e);
+    }
 
   const fixPrompt = `The previous code generation resulted in the following error:
 ${errorContext}
@@ -132,6 +136,7 @@ STRICT RULES: Return ONLY the corrected source code. No markdown, no code fences
     const client = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
+      timeout: 120_000,
       defaultHeaders: {
         'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'VibeCoder Pro',
@@ -208,7 +213,9 @@ export async function generateVibeStep(
       const tools = await mcpClient.listTools();
       systemPrompt += `\n\nAvailable n8n workflow automation tools via MCP:\n${tools.map(t => `- ${t.name}: ${t.description}`).join('\n')}\n\nIf the user asks for workflow creation, you can describe the n8n workflow definition.`;
     }
-  } catch { /* no MCP */ }
+  } catch (e) {
+    console.warn('MCP not available for step, continuing without:', e instanceof Error ? e.message : e);
+  }
 
   const finalPrompt = context ? `Context: ${context}\n\nRequest: ${prompt}` : prompt;
 
@@ -217,6 +224,7 @@ export async function generateVibeStep(
     const client = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
+      timeout: 60_000,
       defaultHeaders: {
         'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'VibeCoder Pro',
