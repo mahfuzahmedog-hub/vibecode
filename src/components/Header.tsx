@@ -80,12 +80,12 @@ export function Header({
           aria-label={`MCP status: ${mcpStatus.connected ? 'Connected' : mcpStatus.connecting ? 'Connecting' : 'Disconnected'}`}
         >
           <div className={`px-2 py-1 rounded-full flex items-center gap-1 ${
-            mcpStatus.connected ? 'bg-green-600' : mcpStatus.connecting ? 'bg-yellow-500' : 'bg-red-500'
+            mcpStatus.connected ? 'bg-green-600' : mcpStatus.connecting ? 'bg-yellow-500' : 'bg-slate-600'
           }`}>
-            <span className="w-2 h-2 rounded-full bg-white inline-block animate-pulse" />
-            <span className="ml-1">
-              {mcpStatus.connected ? 'MCP' : mcpStatus.connecting ? '...' : 'MCP'}
-            </span>
+            <span className={`w-2 h-2 rounded-full bg-white inline-block ${mcpStatus.connecting ? 'animate-pulse' : ''}`} />
+          <span className="ml-1">
+            {mcpStatus.connected ? 'MCP Live' : mcpStatus.connecting ? 'Connecting' : 'MCP Off'}
+          </span>
           </div>
         </div>
 
