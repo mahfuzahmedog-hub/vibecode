@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "next build",
+    "build": "node scripts/build.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "heal": "node scripts/dev.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
