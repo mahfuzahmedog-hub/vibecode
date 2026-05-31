@@ -1,7 +1,9 @@
 'use client';
-import { Sparkles, Workflow, Plus, Rocket, Play, Key } from 'lucide-react';
+import { Sparkles, Workflow, Plus, Rocket, Play, Key, Sun, Moon, Monitor } from 'lucide-react';
 import { MODEL_PRIORITY } from '@/lib/models';
 import type { McpStatus } from '@/lib/types';
+
+type Theme = 'system' | 'light' | 'dark';
 
 interface HeaderProps {
   selectedModel: string | null;
@@ -19,13 +21,15 @@ interface HeaderProps {
   canDeploy: boolean;
   deployingToN8n: boolean;
   hasCode: boolean;
+  theme: Theme;
+  onToggleTheme: () => void;
 }
 
 export function Header({
-  selectedModel, onModelChange, modelUsed, mcpStatus, keySaved,
+  selectedModel, onModelChange, modelUsed,   mcpStatus, keySaved,
   workflowsCount, showWorkflows, onToggleWorkflows, onOpenSettings,
   onCreateWorkflow, onDeploy, onRunCode,
-  canDeploy, deployingToN8n, hasCode,
+  canDeploy, deployingToN8n, hasCode, theme, onToggleTheme,
 }: HeaderProps) {
   return (
     <header className="border-b border-slate-800 glass px-6 py-4 flex justify-between items-center sticky top-0 z-10">
@@ -48,6 +52,15 @@ export function Header({
         >
           <Key className="w-3.5 h-3.5" />
           {keySaved ? 'Key Set' : 'Add Key'}
+        </button>
+
+        <button
+          onClick={onToggleTheme}
+          className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all active:scale-95"
+          aria-label={`Theme: ${theme}`}
+          title={`Theme: ${theme}`}
+        >
+          {theme === 'dark' ? <Moon className="w-4 h-4" /> : theme === 'light' ? <Sun className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
         </button>
 
         <div className="relative">

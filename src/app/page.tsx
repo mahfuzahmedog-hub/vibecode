@@ -5,6 +5,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useAutoFix } from '@/hooks/useAutoFix';
 import { useCodeGeneration } from '@/hooks/useCodeGeneration';
 import { useMcp } from '@/hooks/useMcp';
+import { useTheme } from '@/hooks/useTheme';
 import { Header } from '@/components/Header';
 import { WorkflowPanel } from '@/components/WorkflowPanel';
 import { PromptPanel } from '@/components/PromptPanel';
@@ -28,6 +29,7 @@ export default function VibeCodingPage() {
     toggleWorkflows, createWorkflowFromCode, deployViaMcp,
     openToolConfig, executeConfiguredTool, closeToolConfig, updateToolArgs, loadWorkflows,
   } = useMcp({ addLog });
+  const { theme, toggleTheme } = useTheme();
 
   // Auto-fix: triggered by runtime errors from the preview iframe
   const autoFix = useCallback(async (runtimeError: string) => {
@@ -116,6 +118,8 @@ export default function VibeCodingPage() {
         canDeploy={canDeploy}
         deployingToN8n={deployingToN8n}
         hasCode={hasCode}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <WorkflowPanel
